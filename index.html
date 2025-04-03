@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Web</title>
+    <meta name="description" content="Site em forma 3D - An interactive 3D web experience">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3.5.13/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <link rel="icon" type="image/png" href="https://api.dicebear.com/7.x/shapes/svg?seed=3DWeb">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">3D Web Experience</h1>
+            <p class="text-gray-400 text-lg">Generate and interact with 3D content</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">Generate 3D Scene</h2>
+                <webdraw-textarea 
+                    ref="sceneInput" 
+                    v-model="sceneDescription" 
+                    placeholder="Describe the 3D scene you want to generate..." 
+                    rows="4"
+                    class="w-full mb-4">
+                </webdraw-textarea>
+                <button 
+                    @click="generateScene" 
+                    :disabled="isLoading"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 disabled:opacity-50">
+                    <span v-if="!isLoading">Generate Scene</span>
+                    <span v-else class="flex items-center justify-center">
+                        <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                    </span>
+                </button>
+            </div>
+
+            <div class="bg-gray-800 rounded-lg p-6">
+                <div id="scene-container" class="w-full h-64 rounded-lg overflow-hidden"></div>
+                <div class="mt-4 text-center text-sm text-gray-400">
+                    Use mouse to rotate | Scroll to zoom | Right click to pan
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { SDK } from "https://webdraw.com/webdraw-sdk@v1";
+        import WebdrawTextarea from 'https://assets.webdraw.app/vue/textarea.js';
+
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            components: {
+                'webdraw-textarea': WebdrawTextarea
+            },
+            setup() {
+                const sceneInput = ref(null);
+                const sceneDescription = ref('');
+                const isLoading = ref(false);
+                let scene, camera, renderer, cube;
+
+                const initThreeJS = () => {
+                    scene = new THREE.Scene();
+                    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                    renderer = new THREE.WebGLRenderer();
+                    
+                    const container = document.getElementById('scene-container');
+                    renderer.setSize(container.clientWidth, container.clientHeight);
+                    container.appendChild(renderer.domElement);
+
+                    const geometry = new THREE.BoxGeometry();
+                    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+                    cube = new THREE.Mesh(geometry, material);
+                    scene.add(cube);
+
+                    camera.position.z = 5;
+
+                    const animate = () => {
+                        requestAnimationFrame(animate);
+                        cube.rotation.x += 0.01;
+                        cube.rotation.y += 0.01;
+                        renderer.render(scene, camera);
+                    };
+                    animate();
+                };
+
+                const generateScene = async () => {
+                    try {
+                        isLoading.value = true;
+                        const processedInput = await sceneInput.value.getProcessedContent(sceneDescription.value);
+                        
+                        const stream = await SDK.ai.streamText({
+                            model: "anthropic:claude-3-5-sonnet-latest",
+                            messages: [{
+                                role: "user",
+                                content: processedInput
+                            }]
+                        });
+
+                        let response = '';
+                        for await (const chunk of stream) {
+                            response += chunk.text;
+                        }
+                        
+                        // Here you would parse the response and update the 3D scene
+                        // For now, we'll just keep the rotating cube
+                        
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                onMounted(() => {
+                    initThreeJS();
+                });
+
+                return {
+                    sceneInput,
+                    sceneDescription,
+                    isLoading,
+                    generateScene
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
